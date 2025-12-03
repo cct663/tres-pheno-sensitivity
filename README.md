@@ -1,5 +1,9 @@
 # tres-pheno-sensitivity
 
+A versin of this repository is permanently archived at Zenodo.
+
+[![DOI](https://zenodo.org/badge/17804486.svg)](https://zenodo.org/records/17804486)
+
 ***Goal***
 
 This repository accompanies the manuscript "Divergent climate impacts despite similar response to temperature in a widespread aerial insectivore".
