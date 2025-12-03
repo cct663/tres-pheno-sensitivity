@@ -1,8 +1,8 @@
 # tres-pheno-sensitivity
 
-A versin of this repository is permanently archived at Zenodo.
+A version of this repository is permanently archived at Zenodo.
 
-[![DOI](https://zenodo.org/badge/17804486.svg)](https://zenodo.org/records/17804486)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17804486.svg)](https://doi.org/10.5281/zenodo.17804486)
 
 ***Goal***
 
