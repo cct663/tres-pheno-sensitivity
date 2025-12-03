@@ -1,6 +1,6 @@
 # tres-pheno-sensitivity
 
-*Goal*
+***Goal***
 
 This repository accompanies the manuscript "Divergent climate impacts despite similar response to temperature in a widespread aerial insectivore".
 
@@ -8,7 +8,7 @@ The analysis includes nesting data from tree swallows contributed by groups moni
 
 For questions please contact Conor Taff (cct663@gmail.com). Last updated December 3, 2025.
 
-*Publicly available data*
+***Publicly available data***
 
 - NestWatch project wide download: https://nestwatch.org/explore-data/nestwatch-open-dataset-downloads/
 
@@ -30,7 +30,7 @@ For questions please contact Conor Taff (cct663@gmail.com). Last updated Decembe
 
   Downloaded inline by code, no action needed.
   
-*Data files included with repository*
+***Data files included with repository***
 
 - **data_by_nest.txt**: Compiled nesting data for tree swallows with one row per observed nest for all included study sites other than NestWatch data.
 
@@ -40,7 +40,7 @@ For questions please contact Conor Taff (cct663@gmail.com). Last updated Decembe
 
 - **tree_swallow_2024.txt**: Arrival dates for each grid cell derived from eBird raw data as described in the manuscript.
 
-*Detailed description of columns*
+***Detailed description of columns***
 
 Below is a description of each column for the data files included in the repository. For the additional publicly available data, please refer to the original sources for documentation.
 
