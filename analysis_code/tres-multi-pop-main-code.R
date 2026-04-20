@@ -1861,100 +1861,162 @@
           
               
 # Population trend over time ----
-  # using data from BBS taken from USGS model website for each state/province
-      bbs_dat <- read.delim(here::here("raw_data", "bbs_trends_80_22.txt"))  
-      bbs_dat$state_province[7] <- "Québec" #just fixing a naming issue
-  
-  # add state/province to each population
-        # get locations from natural earth
-          st_prov <- rnaturalearth::ne_states(
-            country     = c("United States of America", "Canada"),
-            returnclass = "sf"
-          ) %>%
-            transmute(
-              state_province = name,            # e.g., "New York", "Ontario"
-              iso_3166_2     = iso_3166_2,      # e.g., "US-NY", "CA-ON"
-              country        = admin            # "United States of America" or "Canada"
-            )
-        
-        # make shape file of population points
-          pts <- st_as_sf(
-            all_pop_locs,
-            coords = c("longitude", "latitude"),
-            crs = 4326,
-            remove = FALSE
-          )
-        
-        # spatial join states and points
-          joined_state <- st_join(pts, st_prov, join = st_within)
-          
-        # deal with any just out of bounds
-          if (anyNA(joined_state$state_province)) {
-            idx <- which(is.na(joined_state$state_province))
-            nn  <- st_nearest_feature(joined_state[idx, ], st_prov)
-            joined_state$state_province[idx] <- st_prov$state_province[nn]
-            joined_state$iso_3166_2[idx]     <- st_prov$iso_3166_2[nn]
-            joined_state$country[idx]        <- st_prov$country[nn]
-            joined_state$assigned_by         <- "nearest"
-            joined_state$assigned_by <- ifelse(is.na(joined_state$assigned_by), "within", joined_state$assigned_by)
-          }
-          
-          js2 <- st_drop_geometry(joined_state[, c("pop_id", "state_province")])
-          
-    # join trend back to all pop locations
-          all_pop_decline <- plyr::join(all_pop_locs, js2, "pop_id", "left", "first")
-          all_pop_decline2 <- plyr::join(all_pop_decline, bbs_dat, "state_province", "left", "first")
-          all_pop_decline2 <- plyr::join(all_pop_decline2, nbp[, c("pop_id", "grand_arr_mu", "grand_mu_lay")],
-                                         "pop_id", "left", "first")
-          all_pop_decline2$arr_to_lay <- all_pop_decline2$grand_mu_lay - all_pop_decline2$grand_arr_mu
-          
-    # fit a model
-          # all_pop_locs$stprov <- as.factor(all_pop_locs$state_province)
-          # trend_m <- gam(trend_80_22 ~ latitude + s(longitude, latitude) + s(stprov, bs = "re"), data = all_pop_locs)
-          
-          
-    # aglommerate to state level
-          ap_state <- all_pop_decline2 %>%
-            dplyr::group_by(state_province) %>%
-            dplyr::summarise(n_nests = sum(n_nests), trend_80_22 = mean(trend_80_22), n = n(),
-                             latitude = mean(latitude), longitude = mean(longitude),
-                             low_bbs = mean(low_ci), high_bbs = mean(high_ci),
-                             arr_to_lay = mean(arr_to_lay))
-          
-          trend_m1 <- lm(trend_80_22 ~ latitude, data = ap_state)
-          
-          t_preds <- ggpredict(trend_m1, terms = "latitude [32:66 by=1]")
-          
-          
-    # make a plot
-        panel_b <- ggplot(ap_state, aes(x = latitude, y = trend_80_22)) +
-          geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-          
-          geom_ribbon(data = t_preds, aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high), 
-                      alpha = 0.3, fill = "coral3") +
-          geom_segment(aes(x = latitude, xend = latitude,
-                           y = low_bbs, yend = high_bbs), color = "gray65") +
-          #geom_point(aes(size = n_nests), shape = 21, fill = "gray70", color = "gray20") +
-          geom_point(shape = 21, fill = "gray70", color = "gray20") +
-          geom_line(data = t_preds, aes(x = x, y = predicted), color = "coral3", linewidth = 1.1) +
-          scale_size_continuous(range = c(.8, 4)) +
-          #geom_smooth(method = "lm", color = "steelblue", fill = "steelblue") +
-          theme_classic() +
-          theme(panel.grid = element_blank(), axis.title = element_text(size = 14), axis.text = element_text(size = 12),
-                legend.position = c(0.85, 0.8)) +
-          #guides(size = guide_legend(title = "nests")) +
-          labs(x = "Latitude", y = "Breeding Bird Survey trend \n (yearly % change 1966-2022)") +
-          annotate("text", x = -Inf, y = Inf, label = "B", hjust = -.8, vjust = 1.6, size = 6)
-        
-        change_bbs <- ggpubr::ggarrange(panel_a, panel_b, nrow = 1)
-        
-        ggsave(here::here("saved_figures", "change_bbs.png"), change_bbs, device = "png",
-               units = "in", dpi = 300, width = 8.4, height = 4.25)
-        
-        ggsave(here::here("saved_figures", "fig3CD.svg"), change_bbs, device = "svg",
-               units = "in", dpi = 300, width = 8.4, height = 4.25)
-
-                  
+              # New version for revision
+              
+              # using data from BBS taken from USGS model website on 3/17/2026 for 1966-2024 version
+              bbs_dat <- read.delim(here::here("raw_data", "bbs_trends_66_24.txt"))
+              bbs_dat$state_province[7] <- "Québec"
+              
+              # get centroid of each state from rnatural earth
+              st_prov <- rnaturalearth::ne_states(
+                country     = c("United States of America", "Canada"),
+                returnclass = "sf"
+              ) %>%
+                transmute(
+                  state_province = name,            # e.g., "New York", "Ontario"
+                  iso_3166_2     = iso_3166_2,      # e.g., "US-NY", "CA-ON"
+                  country        = admin            # "United States of America" or "Canada"
+                )        
+              
+              centroids <- st_prov %>%
+                mutate(centroid = st_centroid(geometry),
+                       lat = st_coordinates(centroid)[, 2],
+                       lon = st_coordinates(centroid)[, 1]) %>%
+                st_drop_geometry() %>%
+                dplyr::select(state_province, iso_3166_2, country, lat, lon) %>%
+                arrange(state_province)
+              
+              # add centroid to bbs data
+              bbs_dat <- plyr::join(bbs_dat, centroids, "state_province", "left", "first")
+              bbs_dat_drop <- bbs_dat %>% filter(center_latitude < 50, center_latitude > 30, trend_66_24 < 10)
+              
+              # fit model and predict
+              
+              trend_m1 <- lm(trend_66_24 ~ center_latitude, data = bbs_dat)
+              
+              t_preds <- ggpredict(trend_m1, terms = "center_latitude [27:62 by=1]")
+              
+              # make a plot
+              panel_b <- ggplot(bbs_dat, aes(x = center_latitude, y = trend_66_24)) +
+                geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+                geom_ribbon(data = t_preds, aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high), 
+                            alpha = 0.3, fill = "coral3") +
+                geom_segment(aes(x = center_latitude, xend = center_latitude,
+                                 y = low_ci, yend = hi_ci), color = "gray65") +
+                geom_point(shape = 21, fill = "gray70", color = "gray20") +
+                geom_line(data = t_preds, aes(x = x, y = predicted), color = "coral3", linewidth = 1.1) +
+                scale_size_continuous(range = c(.8, 4)) +
+                theme_classic() +
+                theme(panel.grid = element_blank(), axis.title = element_text(size = 14), axis.text = element_text(size = 12),
+                      legend.position = c(0.85, 0.8)) +
+                labs(x = "Latitude", y = "Breeding Bird Survey trend \n (yearly % change 1966-2024)") +
+                annotate("text", x = -Inf, y = Inf, label = "B", hjust = -.8, vjust = 1.6, size = 6)
+              
+              change_bbs <- ggpubr::ggarrange(panel_a, panel_b, nrow = 1)
+              
+              ggsave(here::here("saved_figures", "change_bbs.png"), change_bbs, device = "png",
+                     units = "in", dpi = 300, width = 8.4, height = 4.25)
+              
+              ggsave(here::here("saved_figures", "fig3CD.svg"), change_bbs, device = "svg",
+                     units = "in", dpi = 300, width = 8.4, height = 4.25)
+              
+              #OLD VERSION           
+              # using data from BBS taken from USGS model website for each state/province
+              bbs_dat <- read.delim(here::here("raw_data", "bbs_trends_80_22.txt"))  #old version
+              bbs_dat$state_province[7] <- "Québec"
+              
+              # add state/province to each population
+              # get locations from natural earth
+              st_prov <- rnaturalearth::ne_states(
+                country     = c("United States of America", "Canada"),
+                returnclass = "sf"
+              ) %>%
+                transmute(
+                  state_province = name,            # e.g., "New York", "Ontario"
+                  iso_3166_2     = iso_3166_2,      # e.g., "US-NY", "CA-ON"
+                  country        = admin            # "United States of America" or "Canada"
+                )
+              
+              # make shape file of population points
+              pts <- st_as_sf(
+                all_pop_locs,
+                coords = c("longitude", "latitude"),
+                crs = 4326,
+                remove = FALSE
+              )
+              
+              # spatial join states and points
+              joined_state <- st_join(pts, st_prov, join = st_within)
+              
+              # deal with any just out of bounds
+              if (anyNA(joined_state$state_province)) {
+                idx <- which(is.na(joined_state$state_province))
+                nn  <- st_nearest_feature(joined_state[idx, ], st_prov)
+                joined_state$state_province[idx] <- st_prov$state_province[nn]
+                joined_state$iso_3166_2[idx]     <- st_prov$iso_3166_2[nn]
+                joined_state$country[idx]        <- st_prov$country[nn]
+                joined_state$assigned_by         <- "nearest"
+                joined_state$assigned_by <- ifelse(is.na(joined_state$assigned_by), "within", joined_state$assigned_by)
+              }
+              
+              js2 <- st_drop_geometry(joined_state[, c("pop_id", "state_province")])
+              
+              # join trend back to all pop locations
+              all_pop_decline <- plyr::join(all_pop_locs, js2, "pop_id", "left", "first")
+              all_pop_decline2 <- plyr::join(all_pop_decline, bbs_dat, "state_province", "left", "first")
+              all_pop_decline2 <- plyr::join(all_pop_decline2, nbp[, c("pop_id", "grand_arr_mu", "grand_mu_lay")],
+                                             "pop_id", "left", "first")
+              all_pop_decline2$arr_to_lay <- all_pop_decline2$grand_mu_lay - all_pop_decline2$grand_arr_mu
+              
+              # fit a model
+              # all_pop_locs$stprov <- as.factor(all_pop_locs$state_province)
+              # trend_m <- gam(trend_80_22 ~ latitude + s(longitude, latitude) + s(stprov, bs = "re"), data = all_pop_locs)
+              
+              
+              # aglommerate to state level
+              ap_state <- all_pop_decline2 %>%
+                dplyr::group_by(state_province) %>%
+                dplyr::summarise(n_nests = sum(n_nests), trend_80_22 = mean(trend_80_22), n = n(),
+                                 latitude = mean(latitude), longitude = mean(longitude),
+                                 low_bbs = mean(low_ci), high_bbs = mean(high_ci),
+                                 arr_to_lay = mean(arr_to_lay))
+              
+              trend_m1 <- lm(trend_80_22 ~ latitude, data = ap_state)
+              aps2 <- ap_state %>% filter(latitude < 52, trend_80_22 < 11)
+              tm1b <- lm(trend_80_22 ~ latitude, data = aps2)
+              
+              t_preds <- ggpredict(trend_m1, terms = "latitude [32:66 by=1]")
+              
+              
+              # make a plot
+              panel_b <- ggplot(ap_state, aes(x = latitude, y = trend_80_22)) +
+                geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+                
+                geom_ribbon(data = t_preds, aes(x = x, y = predicted, ymin = conf.low, ymax = conf.high), 
+                            alpha = 0.3, fill = "coral3") +
+                geom_segment(aes(x = latitude, xend = latitude,
+                                 y = low_bbs, yend = high_bbs), color = "gray65") +
+                #geom_point(aes(size = n_nests), shape = 21, fill = "gray70", color = "gray20") +
+                geom_point(shape = 21, fill = "gray70", color = "gray20") +
+                geom_line(data = t_preds, aes(x = x, y = predicted), color = "coral3", linewidth = 1.1) +
+                scale_size_continuous(range = c(.8, 4)) +
+                #geom_smooth(method = "lm", color = "steelblue", fill = "steelblue") +
+                theme_classic() +
+                theme(panel.grid = element_blank(), axis.title = element_text(size = 14), axis.text = element_text(size = 12),
+                      legend.position = c(0.85, 0.8)) +
+                #guides(size = guide_legend(title = "nests")) +
+                labs(x = "Latitude", y = "Breeding Bird Survey trend \n (yearly % change 1966-2022)") +
+                annotate("text", x = -Inf, y = Inf, label = "B", hjust = -.8, vjust = 1.6, size = 6)
+              
+              change_bbs <- ggpubr::ggarrange(panel_a, panel_b, nrow = 1)
+              
+              ggsave(here::here("saved_figures", "change_bbs.png"), change_bbs, device = "png",
+                     units = "in", dpi = 300, width = 8.4, height = 4.25)
+              
+              ggsave(here::here("saved_figures", "fig3CD.svg"), change_bbs, device = "svg",
+                     units = "in", dpi = 300, width = 8.4, height = 4.25)
+              
+              
 # Change in temperature over time Berkeley Earth data ----
     # Will need to download Berkeley earth data and place it in the directory here    
         
@@ -2138,3 +2200,532 @@
         
               
         
+# Full climwin simulation ----
+    
+    # Setting up populations from real data     
+    # Filter to populations used in climwin analysis (8+ years with 15+ nests)
+    sim_base <- nby5 %>%
+      filter(years_with_15_nests > 7) %>%
+      dplyr::select(pop_id, year, mu_lay, mu_tavg, grand_mu_lay, latitude, longitude)
+    
+    # Get population-level info
+    sim_pops <- sim_base %>%
+      group_by(pop_id) %>%
+      summarise(
+        n_years = n(),
+        grand_mu_lay = first(grand_mu_lay),
+        latitude = first(latitude),
+        longitude = first(longitude)
+      )
+    
+    # Parameters from the real consensus window model used as starting point
+    true_intercept <- fixef(sens_r)[1]  # ~150.87
+    true_slope <- fixef(sens_r)[2]      # ~-0.95
+    re_intercept_sd <- as.numeric(attr(VarCorr(sens_r)$pop_id, "stddev")) # ~8.74
+    residual_sd <- sigma(sens_r)  # ~3.19
+    
+    # Make a function for the simulation
+    run_one_sim <- function(sim_id,
+                            sim_base,
+                            all_merra_temperature,
+                            true_slope = true_slope,
+                            true_intercept = true_intercept,
+                            re_intercept_sd = re_intercept_sd,
+                            re_slope_sd = 0,  # set to zero for no slope variance among populations
+                            residual_sd = residual_sd){
+      
+      cat(paste("Starting simulation", sim_id, "\n"))
+      
+      # Get unique populations
+      pops <- unique(sim_base$pop_id)
+      
+      # Simulate random effects for each population
+      pop_effects <- data.frame(
+        pop_id = pops,
+        re_int = rnorm(length(pops), 0, re_intercept_sd),
+        re_slope = rnorm(length(pops), 0, re_slope_sd)
+      )
+      
+      # Merge random effects with data
+      sim_dat <- sim_base %>%
+        left_join(pop_effects, by = "pop_id") %>%
+        mutate(
+          #simulate laying date: true model with consensus window timing
+          mu_lay_sim = true_intercept + re_int + (true_slope + re_slope) * mu_tavg + 
+            rnorm(n(), 0, residual_sd)
+        )
+      
+      # Sim step 1: run climwin on each simulated population to identify sensitive window
+      # prepare to store climwin results
+      # Initialize column for population-specific window temperature
+      sim_dat$mu_tavg_cw <- NA
+      
+      for(j in seq_along(pops)) {
+        
+        # Get this population's simulated data
+        temp_pop <- sim_dat %>% filter(pop_id == pops[j])
+        
+        if(nrow(temp_pop) < 3) next
+        
+        # Format date for climwin
+        temp_pop$date <- mapply(function(year, mu_lay){
+          format(as.Date(mu_lay, origin = paste0(year, "-01-01")) - 1, "%d/%m/%Y")
+        }, temp_pop$year, temp_pop$mu_lay_sim)
+        
+        # Get temperature data for this population
+        temp_temp <- all_merra_temperature %>%
+          filter(pop_id == pops[j])
+        temp_temp <- temp_temp[!duplicated(temp_temp$date), ]
+        
+        if(nrow(temp_temp) == 0) next
+        
+        # Reference day: 14 days after mean simulated laying date
+        ref_doy <- round(mean(temp_pop$mu_lay_sim, na.rm = TRUE), 0) + 14
+        
+        # Convert ref_doy to month/day format
+        ref_date <- as.Date("2001-01-01") + (ref_doy - 1)
+        ref_day <- as.numeric(format(ref_date, "%d"))
+        ref_month <- as.numeric(format(ref_date, "%m"))
+        
+        # Run climwin
+        tryCatch({
+          cwin <- slidingwin(
+            xvar = list(Temp = temp_temp$tavg_c),
+            cdate = temp_temp$date,
+            bdate = temp_pop$date,
+            baseline = lm(mu_lay_sim ~ 1, data = temp_pop),
+            cinterval = "day",
+            range = c(56, 0),
+            type = "absolute",
+            refday = c(ref_day, ref_month),
+            stat = "mean",
+            func = "lin",
+            cmissing = "method1"
+          )
+          
+          cwin_out <- cwin[[1]]$Dataset
+          
+          # Filter to plausible windows (2-4 weeks, closing within 2 weeks of laying)
+          cwin_out_r <- cwin_out %>% 
+            filter(WindowOpen - WindowClose > 13, 
+                   WindowOpen - WindowClose < 29,
+                   WindowClose < 28)
+          
+          if(nrow(cwin_out_r) > 0) {
+            # Get the best window open/close in DOY
+            best_open_doy <- ref_doy - cwin_out_r$WindowOpen[1]
+            best_close_doy <- ref_doy - cwin_out_r$WindowClose[1]
+            
+            # Calculate temperature from the best window for each year
+            cw_temp_by_year <- temp_temp %>%
+              filter(yday > best_open_doy - 1, yday < best_close_doy + 1) %>%
+              group_by(year) %>%
+              summarise(mu_tavg_cw = mean(tavg_c, na.rm = TRUE))
+            
+            # Merge back into sim_dat for this population
+            for(k in 1:nrow(cw_temp_by_year)) {
+              idx <- which(sim_dat$pop_id == pops[j] & 
+                             sim_dat$year == cw_temp_by_year$year[k])
+              if(length(idx) > 0) {
+                sim_dat$mu_tavg_cw[idx] <- cw_temp_by_year$mu_tavg_cw[k]
+              }
+            }
+          }
+          
+        }, error = function(e) {
+          # Skip this population if climwin fails
+        })
+        
+      }
+      
+      # step 2: fit the actual mixed models
+      # models using population specific climwin window temperature
+      sim_dat_cw <- sim_dat %>% filter(!is.na(mu_tavg_cw))
+      
+      cw_slope_sd <- NA
+      cw_lrt_p <- NA
+      cw_fixed_slope <- NA
+      
+      if(nrow(sim_dat_cw) > 10 & length(unique(sim_dat_cw$pop_id)) > 3) {
+        tryCatch({
+          m_full_cw <- lmer(mu_lay_sim ~ mu_tavg_cw + (mu_tavg_cw | pop_id), 
+                            data = sim_dat_cw, REML = TRUE)
+          m_red_cw <- lmer(mu_lay_sim ~ mu_tavg_cw + (1 | pop_id), 
+                           data = sim_dat_cw, REML = TRUE)
+          
+          # Extract random slope SD
+          vc_cw <- as.data.frame(VarCorr(m_full_cw))
+          cw_row <- vc_cw[vc_cw$grp == "pop_id" & !is.na(vc_cw$var1) & vc_cw$var1 == "mu_tavg_cw", ]
+          if(nrow(cw_row) > 0) cw_slope_sd <- cw_row$sdcor[1]
+          
+          # Fixed effect slope
+          cw_fixed_slope <- fixef(m_full_cw)[2]
+          
+          # LRT
+          lrt_cw <- anova(m_full_cw, m_red_cw, refit = TRUE)
+          cw_lrt_p <- lrt_cw$`Pr(>Chisq)`[2]
+          
+        }, error = function(e) {})
+      }
+      
+      # --- Models using consensus window temperature ---
+      sim_dat_con <- sim_dat %>% filter(!is.na(mu_tavg))
+      
+      con_slope_sd <- NA
+      con_lrt_p <- NA
+      con_fixed_slope <- NA
+      
+      if(nrow(sim_dat_con) > 10 & length(unique(sim_dat_con$pop_id)) > 3) {
+        tryCatch({
+          m_full_con <- lmer(mu_lay_sim ~ mu_tavg + (mu_tavg | pop_id), 
+                             data = sim_dat_con, REML = TRUE)
+          m_red_con <- lmer(mu_lay_sim ~ mu_tavg + (1 | pop_id), 
+                            data = sim_dat_con, REML = TRUE)
+          
+          # Extract random slope SD
+          vc_con <- as.data.frame(VarCorr(m_full_con))
+          con_row <- vc_con[vc_con$grp == "pop_id" & !is.na(vc_con$var1) & vc_con$var1 == "mu_tavg", ]
+          if(nrow(con_row) > 0) con_slope_sd <- con_row$sdcor[1]
+          
+          # Fixed effect slope
+          con_fixed_slope <- fixef(m_full_con)[2]
+          
+          # LRT
+          lrt_con <- anova(m_full_con, m_red_con, refit = TRUE)
+          con_lrt_p <- lrt_con$`Pr(>Chisq)`[2]
+          
+        }, error = function(e) {})
+      }
+      
+      # also save SD of per-population OLS slopes for comparison
+      pop_slopes_cw <- sim_dat_cw %>%
+        group_by(pop_id) %>%
+        summarise(ols_slope = coef(lm(mu_lay_sim ~ mu_tavg_cw))[2])
+      
+      pop_slopes_con <- sim_dat_con %>%
+        group_by(pop_id) %>%
+        summarise(ols_slope = coef(lm(mu_lay_sim ~ mu_tavg))[2])
+      
+      # step 3 collect results
+      
+      results <- data.frame(
+        sim_id = sim_id,
+        true_slope_sd = re_slope_sd,
+        # Mixed model estimates 
+        cw_slope_sd_lmer = cw_slope_sd,
+        con_slope_sd_lmer = con_slope_sd,
+        # LRT p-values 
+        cw_lrt_p = cw_lrt_p,
+        con_lrt_p = con_lrt_p,
+        # Fixed effect slopes 
+        cw_fixed_slope = cw_fixed_slope,
+        con_fixed_slope = con_fixed_slope,
+        # OLS slope SDs for comparison
+        sd_ols_cw = sd(pop_slopes_cw$ols_slope, na.rm = TRUE),
+        sd_ols_con = sd(pop_slopes_con$ols_slope, na.rm = TRUE),
+        # Sample sizes
+        n_pops_cw = length(unique(sim_dat_cw$pop_id)),
+        n_pops_con = length(unique(sim_dat_con$pop_id))
+      )
+      
+      cat(paste("  Completed sim", sim_id, 
+                "- lmer SD(cw):", round(cw_slope_sd, 3),
+                "- lmer SD(con):", round(con_slope_sd, 3),
+                "- LRT p(cw):", round(cw_lrt_p, 4),
+                "- LRT p(con):", round(con_lrt_p, 4), "\n"))
+      
+      return(results)    
+      
+    }
+    
+    # Run the actual simulations
+    n_sims <- 100
+    
+    # scenario 1: no true slope variance (sd = 0)
+    results_no_var <- map_dfr(1:n_sims, function(i) {
+      run_one_sim(
+        sim_id = i,
+        sim_base = sim_base,
+        all_merra_temperature = all_merra_temperature,
+        true_slope = true_slope,
+        true_intercept = true_intercept,
+        re_intercept_sd = re_intercept_sd,
+        re_slope_sd = 0,
+        residual_sd = residual_sd
+      )
+    })
+    
+    #saveRDS(results_no_var, here::here("saved_data_downloads", "sim_results_no_var.rds"))
+    results_no_var <- readRDS(here::here("saved_data_downloads", "sim_results_no_var.rds"))
+    
+    # scenario 2: moderate true slope variance (sd = 1 day/C)
+    results_with_var <- map_dfr(1:n_sims, function(i) {
+      run_one_sim(
+        sim_id = i,
+        sim_base = sim_base,
+        all_merra_temperature = all_merra_temperature,
+        true_slope = true_slope,
+        true_intercept = true_intercept,
+        re_intercept_sd = re_intercept_sd,
+        re_slope_sd = 1,
+        residual_sd = residual_sd
+      )
+    })
+    
+    # saveRDS(results_with_var, here::here("saved_data_downloads", "sim_results_with_var.rds"))
+    results_with_var <- readRDS(here::here("saved_data_downloads", "sim_results_with_var.rds"))
+    
+    
+    # Make some plots
+    
+    sim1_p1 <- results_no_var %>%
+      ggplot(aes(x = con_slope_sd_lmer)) +
+      geom_density(aes(fill = "Consensus window"), alpha = 0.8, adjust = 1.5) +
+      geom_density(aes(x = cw_slope_sd_lmer, fill = "Population-specific window"), alpha = 0.8, adjust = 1.5) +
+      theme_bw() +
+      # Manual fill scale for legend
+      scale_fill_manual(name = "", 
+                        values = c("Consensus window" = "slateblue", 
+                                   "Population-specific window" = "coral3")) +
+      theme(panel.grid = element_blank(), axis.title = element_text(size = 14), 
+            axis.text = element_text(size = 12),
+            legend.position = c(0.7, 0.7),
+            legend.background = element_blank()) +
+      xlab("Estimated SD of population slopes") +
+      ylab("Density") +
+      ggtitle("True slope SD = 0") +
+      geom_segment(aes(x = 0, xend = 0, y = 0, yend = 7), linetype = "solid", color = "black") +
+      geom_point(aes(x = 0, y = 7), size = 3) +
+      annotate("text", x = 0, y = 7.2, label = "True SD", angle = 0, hjust = 0, vjust = 0) +
+      coord_cartesian(ylim = c(0, 9.5)) +
+      geom_segment(aes(x = mean(results_no_var$con_slope_sd_lmer), xend = mean(results_no_var$cw_slope_sd_lmer),
+                       y = 4, yend = 4), arrow = arrow(ends = "both", type = "open", length = unit(0.2, "cm"),
+                                                       angle = 90), color = "black") +
+      annotate("text", x = 0.4, y = 4.5, label = "Overestimation of slope SD", color = "black") +
+      geom_segment(aes(x = 0, xend = 0.1, y = 9, yend = 9), color = "slateblue",
+                   arrow = arrow(ends = "both", type = "open", length = unit(0.1, "cm"), angle = 90)) +
+      geom_point(aes(x = 0.02, y = 9), size = 2, fill = "slateblue", shape = 21) +
+      geom_segment(aes(x = 0.34, xend = 0.72, y = 9, yend = 9), color = "coral3",
+                   arrow = arrow(ends = "both", type = "open", length = unit(0.1, "cm"), angle = 90)) +
+      geom_point(aes(x = 0.54, y = 9), size = 2, fill = "coral3", shape = 21) +
+      geom_hline(yintercept = 7.7, color = "gray75") +
+      annotate("text", x = 0.38, y = 8.3, label = "Empirical estimates and CI", color = "gray50") +
+      annotate("text", x = -Inf, y = Inf, label = "A", hjust = -.4, vjust = 1.2, size = 6) +
+      scale_y_continuous(breaks = c(0, 2, 4, 6))
+    
+    
+    sim1_p2 <- results_with_var %>%
+      ggplot(aes(x = con_slope_sd_lmer)) +
+      geom_density(fill = "slateblue", alpha = 0.8, adjust = 1.5) +
+      geom_density(aes(x = cw_slope_sd_lmer), fill = "coral3", alpha = 0.8, adjust = 1.5) +
+      theme_bw() +
+      theme(panel.grid = element_blank(), axis.title = element_text(size = 14), axis.text = element_text(size = 12)) +
+      xlab("Estimated SD of population slopes") +
+      ylab("Density") +
+      ggtitle("True slope SD = 1") +
+      geom_segment(aes(x = 1, xend = 1, y = 0, yend = 3.7), linetype = "solid", color = "black") +
+      geom_point(aes(x = 1, y = 3.7), size = 3) +
+      annotate("text", x = 1, y = 3.9, label = "True SD", angle = 0, hjust = 0, vjust = 0) +
+      coord_cartesian(ylim = c(0, 5.5)) +
+      geom_segment(aes(x = mean(results_with_var$con_slope_sd_lmer), xend = mean(results_with_var$cw_slope_sd_lmer),
+                       y = 4.6, yend = 4.6), arrow = arrow(ends = "both", type = "open", length = unit(0.2, "cm"),
+                                                           angle = 90), color = "black") +
+      annotate("text", x = 1.1, y = 4.9, label = "Overestimation of slope SD", color = "black") +
+      annotate("text", x = -Inf, y = Inf, label = "B", hjust = -.4, vjust = 1.2, size = 6) 
+    
+    sim1_combo <- ggpubr::ggarrange(sim1_p1, sim1_p2, nrow = 1)
+    
+    ggsave(sim1_combo, filename = here::here("saved_figures", "sim1_slope_sd.png"), device = "png",
+           width = 8.4, height = 4.25, units = "in", dpi = 300)
+    
+    
+# Power analysis for detecting among population variation in slope ----
+    
+    # Using the same data as in the main population model sens_slp to estimate power to detect 
+    # different levels of among population variation in slope to temperature
+    
+    sim_power_base <- dev_df_out %>%
+      dplyr::select(pop_id, year, mu_lay, climate)
+    
+    # parameters from the real consensus window (same as in above simulation)
+    true_intercept <- fixef(sens_r)[1]       # ~150.87
+    true_slope <- fixef(sens_r)[2]           # ~-0.95
+    re_intercept_sd <- as.numeric(attr(VarCorr(sens_r)$pop_id, "stddev"))  # ~8.74
+    residual_sd <- sigma(sens_r)              # ~3.19
+    real_re <- ranef(sens_r)$pop_id
+    real_re$pop_id <- rownames(real_re)
+    colnames(real_re)[1] <- "re_intercept"
+    real_re$fitted_intercept <- fixef(sens_r)[1] + real_re$re_intercept
+    
+    # add actual population laying dates
+    sim_power_base <- sim_power_base %>%
+      left_join(real_re[, c("pop_id", "fitted_intercept")], by = "pop_id")
+    
+    # Define simulation parameters
+    #range of true slope SDs to test
+    slope_sd_values <- seq(0, .6, by = 0.05)
+    
+    # number of iteractions per sd level
+    n_iters <- 100
+    
+    # store results
+    power_results <- expand.grid(
+      true_slope_sd = slope_sd_values,
+      iter = 1:n_iters,
+      estimated_slope_sd = NA,
+      lrt_p = NA,
+      lrt_significant = NA,
+      fixed_slope = NA
+    )
+    
+    # Run simulation
+    set.seed(123)
+    
+    pops <- unique(sim_power_base$pop_id)
+    n_pops <- length(pops)
+    
+    pop_indices <- split(seq_len(nrow(sim_power_base)), sim_power_base$pop_id)
+    
+    total_runs <- nrow(power_results)
+    start_time <- Sys.time()
+    
+    for(i in 1:total_runs){
+      sd_val <- power_results$true_slope_sd[i]
+      
+      # Simulate random effects
+      #re_int <- setNames(rnorm(n_pops, 0, re_intercept_sd), pops)
+      re_slope <- setNames(rnorm(n_pops, 0, sd_val), pops)
+      
+      # Simulate laying dates using actual temperature values and population structure
+      sim_power_base$mu_lay_sim <- sim_power_base$fitted_intercept + 
+        (true_slope + re_slope[as.character(sim_power_base$pop_id)]) * sim_power_base$climate +
+        rnorm(nrow(sim_power_base), 0, residual_sd)
+      
+      # Fit full and reduced models
+      tryCatch({
+        m_full <- lmer(mu_lay_sim ~ climate + (climate | pop_id), 
+                       data = sim_power_base, REML = TRUE,
+                       control = lmerControl(optimizer = "bobyqa"))
+        m_red <- lmer(mu_lay_sim ~ climate + (1 | pop_id), 
+                      data = sim_power_base, REML = TRUE)
+        
+        # Extract slope SD
+        vc <- as.data.frame(VarCorr(m_full))
+        slope_row <- vc[vc$grp == "pop_id" & !is.na(vc$var1) & vc$var1 == "climate", ]
+        if(nrow(slope_row) > 0) {
+          power_results$estimated_slope_sd[i] <- slope_row$sdcor[1]
+        }
+        
+        # Fixed effect
+        power_results$fixed_slope[i] <- fixef(m_full)[2]
+        
+        # LRT
+        lrt <- anova(m_full, m_red, refit = TRUE)
+        power_results$lrt_p[i] <- lrt$`Pr(>Chisq)`[2]
+        power_results$lrt_significant[i] <- lrt$`Pr(>Chisq)`[2] < 0.05
+        
+      }, error = function(e) {})
+      
+      # Progress
+      if(i %% (n_iters * 2) == 0) {
+        elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "mins"))
+        pct <- round(i / total_runs * 100, 1)
+        est_total <- elapsed / (i / total_runs)
+        cat(paste0(pct, "% complete (", round(elapsed, 1), " min elapsed, ~", 
+                   round(est_total - elapsed, 1), " min remaining)\n"))
+      }
+      
+    }
+    
+    
+    # Use the results from the simulation
+    # Calculate power at each SD level
+    power_summary <- power_results %>%
+      group_by(true_slope_sd) %>%
+      summarise(
+        power = mean(lrt_significant, na.rm = TRUE),
+        mean_estimated_sd = mean(estimated_slope_sd, na.rm = TRUE),
+        median_estimated_sd = median(estimated_slope_sd, na.rm = TRUE),
+        mean_fixed_slope = mean(fixed_slope, na.rm = TRUE),
+        n_converged = sum(!is.na(lrt_p)),
+        .groups = "drop"
+      )    
+    
+    # Find the SD at which power reaches 80%
+    power_80 <- power_summary %>%
+      filter(power >= 0.80) %>%
+      slice_min(true_slope_sd)
+    
+    if(nrow(power_80) > 0) {
+      cat("\n80% power reached at SD =", power_80$true_slope_sd[1], "\n")
+    } else {
+      cat("\n80% power not reached within tested range\n")
+    }
+    
+    # Find false positive rate at SD = 0
+    fp_rate <- power_summary %>% filter(true_slope_sd == 0)
+    cat("False positive rate at SD = 0:", fp_rate$power, "\n")
+    
+    
+    # plot power curve
+    power_plot <- ggplot(power_summary, aes(x = true_slope_sd, y = power)) +
+      geom_line(color = "steelblue", linewidth = 1.2) +
+      geom_point(color = "steelblue", size = 2) +
+      geom_hline(yintercept = 0.80, linetype = "dashed", color = "gray50") +
+      #geom_hline(yintercept = 0.05, linetype = "dotted", color = "coral3") +
+      # Vertical line at 80% power threshold
+      #{if(nrow(power_80) > 0) geom_vline(xintercept = power_80$true_slope_sd[1], 
+      #                                  linetype = "dashed", color = "gray50", linewidth = 0.5)} +
+      geom_vline(xintercept = 0.307, linetype = "dashed", color = "gray50", linewidth = 0.5) +
+      # Shaded region for CI from real data
+      annotate("rect", xmin = 0, xmax = 0.10, ymin = -Inf, ymax = Inf,
+               alpha = 0.2, fill = "steelblue") +
+      annotate("text", x = 0.05, y = 0.90, label = "95% CI from\nconsensus model",
+               size = 3, color = "steelblue4") +
+      theme_classic() +
+      theme(
+        panel.grid = element_blank(),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12)
+      ) +
+      labs(
+        x = "True SD of phenological sensitivity \n among populations (days/°C)",
+        y = "Power (proportion detecting\nsignificant slope variance)"
+      ) +
+      scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+      annotate("text", x = max(slope_sd_values) * 0.7, y = 0.83, 
+               label = "80% power", color = "gray50", size = 4) +
+      annotate("text", x = 0.34, y = 0, label = "0.31", color = "gray50")#+
+    #annotate("text", x = max(slope_sd_values) * 0.7, y = 0.08, 
+    #        label = "5% false positive rate", color = "coral3", size = 4)    
+    
+    ggsave(power_plot, filename = here::here("saved_figures", "power_curve.png"), device = "png",
+           width = 5, height = 4, units = "in", dpi = 300)
+    
+    
+    # plot estimated vs. true sd from simulation
+    recovery_plot <- ggplot(power_summary, aes(x = true_slope_sd, y = mean_estimated_sd)) +
+      geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+      geom_line(color = "steelblue", linewidth = 1.2) +
+      geom_point(color = "steelblue", size = 2) +
+      theme_classic() +
+      theme(
+        panel.grid = element_blank(),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12)
+      ) +
+      labs(
+        x = "True SD of phenological sensitivity (days/°C)",
+        y = "Mean estimated SD from mixed model (days/°C)"
+      )
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

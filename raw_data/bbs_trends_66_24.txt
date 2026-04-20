@@ -1,0 +1,58 @@
+state_province	trend_66_24	low_ci	hi_ci	center_latitude
+Alabama	7.35	4.16	11.96	32.807
+Alaska	-2	-4.12	-0.07	61.371
+Alberta	0.72	-0.18	1.64	53.933
+Arizona	0.25	-4.5	6.01	33.73
+Arkansas	3.86	0.84	7.59	34.97
+British Columbia	-1.31	-2.19	-0.42	53.727
+California	0.99	0.19	1.86	36.116
+Colorado	-0.22	-1.37	1.08	39.06
+Connecticut	1.51	0.19	2.88	41.598
+Delaware	4.12	2.04	6.38	39.319
+Florida	10.68	1.46	25.48	27.766
+Georgia	6.5	2.97	10.27	33.041
+Idaho	0.92	-0.66	2.55	44.24
+Illinois	3.52	2.1	5.14	40.349
+Indiana	6.26	4.39	8.3	39.849
+Iowa	4.69	2.36	6.97	42.012
+Kansas	4.09	1.44	7.36	38.527
+Kentucky	10.28	6.96	14.08	37.668
+Maine	-3.59	-4.7	-2.52	44.694
+Manitoba	-1.16	-2.3	-0.15	53.761
+Maryland	4.91	3.66	6.15	39.064
+Massachusetts	-0.53	-1.49	0.3	42.23
+Michigan	-0.61	-1.49	0.28	43.327
+Minnesota	0.85	0.12	1.62	45.694
+Mississippi	6.95	1.16	18.48	32.742
+Missouri	5.6	2.83	8.8	38.456
+Montana	0.92	-0.02	1.83	46.922
+Nebraska	7.3	4.43	10.51	41.125
+Nevada	-1.84	-6.97	1.38	38.314
+New Brunswick	-2.21	-2.92	-1.5	46.565
+New Hampshire	-2.34	-3.1	-1.6	43.452
+New Jersey	0.6	-1.03	2.19	40.299
+New Mexico	-0.42	-3.24	1.59	34.841
+New York	-0.9	-1.6	-0.26	42.166
+North Carolina	5.63	3.05	8.33	35.63
+North Dakota	3.58	2.19	5	47.529
+Nova Scotia	-1.49	-2.3	-0.69	44.682
+Ohio	3.76	2.25	5.26	40.389
+Oklahoma	1.11	-3.17	7.15	35.565
+Ontario	-2.36	-3.08	-1.63	51.254
+Oregon	-1.31	-2.19	-0.52	44.572
+Pennsylvania	2.61	1.8	3.43	40.591
+Prince Edward Island	-0.99	-3.34	1.23	46.511
+Quebec	-1.86	-2.94	-0.91	52.94
+Rhode Island	-0.82	-3.86	1.98	41.681
+Saskatchewan	0.56	-0.44	1.6	52.94
+South Carolina	-1.19	-8.07	6.14	33.857
+South Dakota	5.43	3.55	7.45	44.3
+Tennessee	12.22	9.19	15.53	35.748
+Texas	1.78	-1.62	6.64	31.054
+Utah	-1.09	-3.14	1.24	40.15
+Vermont	-2.37	-3.38	-1.38	44.046
+Virginia	5.9	3.82	7.87	37.769
+Washington	-0.13	-1.07	0.84	47.401
+West Virginia	7.73	4.89	11.62	38.491
+Wisconsin	-0.8	-1.43	-0.17	44.269
+Wyoming	0.55	-0.74	1.86	42.756
